@@ -4,12 +4,11 @@ from telebot import TeleBot
 from telebot.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
 # ---------- Токен ----------
-TOKEN = "7625896213:AAEPFtQ5gyKWpgSmSrrqBLEoVHtBRENjL_M"  # Ваш токен
+TOKEN = "7625896213:AAEPFtQ5gyKWpgSmSrrqBLEoVHtBRENjL_M"
 bot = TeleBot(TOKEN)
 
 # ---------- Клавиатуры ----------
 def main_keyboard():
-    """Основная клавиатура с кнопками для кубика"""
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn1 = KeyboardButton("🎲 Бросить кубик")
     btn2 = KeyboardButton("✏️ Ввести число")
@@ -17,11 +16,9 @@ def main_keyboard():
     return markup
 
 def number_keyboard():
-    """Клавиатура с цифрами 1-6 для ввода числа"""
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
     buttons = [KeyboardButton(str(i)) for i in range(1, 7)]
     markup.add(*buttons)
-    # Добавим кнопку "Назад" для возврата в главное меню
     markup.add(KeyboardButton("🔙 Назад"))
     return markup
 
@@ -109,36 +106,30 @@ def reset_game(user_id):
     return data
 
 # ---------- Игровая логика ----------
-# Змеи и стрелы (классические из Хариша Джохари)
+# Змеи и стрелы (новые, предоставленные тобой)
 SNAKES = {
-    16: 6,   # Зависть -> Заблуждение
-    21: 3,   # Покаяние -> Гнев
-    26: 8,   # Скорбь -> Алчность
-    31: 9,   # План святости -> Чувственный план
-    36: 12,  # Ясность сознания -> Развлечение
-    41: 14,  # Человеческий план -> Астральный план
-    44: 2,   # Невежество -> Майя
-    49: 1,   # Лунный план -> Рождение
-    52: 29,  # План насилия -> Безверие
-    58: 5,   # Слава -> Физический план
-    62: 19,  # Дурная компания -> План кармы
-    68: 54,  # Космическое сознание -> План аскезы (особый случай)
-    71: 37   # Тьма -> Истинное знание
+    12: 8,
+    16: 4,
+    24: 7,
+    29: 6,
+    44: 9,
+    52: 35,
+    55: 3,
+    61: 13,
+    63: 2,
+    72: 51
 }
-
 ARROWS = {
-    2: 23,   # Майя -> Небесный план
-    9: 34,   # Чувственный план -> План вкуса
-    12: 27,  # Развлечение -> Бескорыстное служение
-    15: 30,  # План фантазии -> Благие устремления
-    18: 50,  # План радости -> План аскезы
-    25: 58,  # Хорошая компания -> Слава
-    32: 68,  # План равновесия -> Космическое сознание
-    39: 59,  # План избавления -> Йога
-    45: 60,  # Совершенное знание -> Истина
-    54: 48,  # План аскезы -> Солнечный план
-    61: 67,  # Праведность -> Единство
-    70: 68   # Свет -> Космическое сознание
+    10: 23,
+    17: 69,
+    20: 32,
+    22: 60,
+    27: 41,
+    28: 50,
+    37: 66,
+    45: 67,
+    46: 62,
+    54: 68
 }
 
 def apply_snake_or_arrow(cell):
@@ -149,12 +140,12 @@ def apply_snake_or_arrow(cell):
     return None, None
 
 def move_from_start(steps, user_id):
-    """Перемещение при входе в игру. Возвращает итоговую позицию и список событий для истории"""
+    """Перемещение при входе в игру. Возвращает итоговую позицию и список событий."""
     position = 6
     steps_left = steps - 1
-    events = [("start_land", 6, get_cell_name(6))]  # сначала попали на 6
+    events = [("start_land", 6, get_cell_name(6))]
     
-    # Проверяем, есть ли на 6 клетке змея/стрела
+    # Проверяем, есть ли на клетке 6 змея/стрела
     new_pos, tt = apply_snake_or_arrow(position)
     if new_pos is not None:
         events.append(("trigger", position, tt, new_pos))
@@ -163,7 +154,8 @@ def move_from_start(steps, user_id):
         add_to_history(user_id, f"→ Клетка 6: Заблуждение -> {tt.upper()} на {position}")
         return position, events
     
-    # Если на 6 нет перехода, двигаемся дальше
+    add_to_history(user_id, f"→ Клетка 6: Заблуждение")
+    
     for step in range(steps_left):
         position += 1
         if position > 72:
@@ -184,7 +176,7 @@ def move_from_start(steps, user_id):
     return position, events
 
 def move_from_position(current_pos, steps, user_id):
-    """Обычное перемещение. Возвращает новую позицию, флаг завершения и список событий"""
+    """Обычное перемещение. Возвращает новую позицию, флаг завершения и список событий."""
     pos = current_pos
     events = []
     finished = False
@@ -192,7 +184,6 @@ def move_from_position(current_pos, steps, user_id):
     for step in range(steps):
         next_cell = pos + 1
         
-        # Проверка выхода за 8-й уровень
         if 57 <= pos <= 64 and next_cell > 68:
             add_to_history(user_id, f"⚠️ Бросок сгорает на 8-м уровне")
             return pos, False, [("burn",)]
@@ -205,7 +196,6 @@ def move_from_position(current_pos, steps, user_id):
             break
             
         pos = next_cell
-        # Проверяем, не является ли эта клетка змеёй/стрелой
         new_pos, tt = apply_snake_or_arrow(pos)
         if new_pos is not None:
             events.append(("trigger", pos, tt, new_pos))
@@ -220,12 +210,10 @@ def move_from_position(current_pos, steps, user_id):
     return pos, (pos == 68), events
 
 def process_roll(user_id, dice_value):
-    """Основная функция обработки броска"""
     user = get_user(user_id)
     if not user or not user['game_active']:
         return "❌ У вас нет активной игры. Начните новую с /newgame.", None, main_keyboard()
 
-    # Если выпала 6
     if dice_value == 6:
         user['pending_sixes'] += 1
         user['waiting_for_roll'] = True
@@ -240,14 +228,12 @@ def process_roll(user_id, dice_value):
             desc = get_cell_description(1)
             return f"🔄 Четыре шестёрки подряд! Вы возвращаетесь на клетку 1.\n\n{desc}", None, main_keyboard()
             
-        return f"🎲 Выпало 6! Всего шестёрок подряд: {user['pending_sixes']}\nБросайте ещё раз.", None, number_keyboard() if user['waiting_for_roll'] else main_keyboard()
+        return f"🎲 Выпало 6! Всего шестёрок подряд: {user['pending_sixes']}\nБросайте ещё раз.", None, main_keyboard()
 
-    # Если выпало не 6
     total_sixes = user['pending_sixes']
     user['pending_sixes'] = 0
     user['waiting_for_roll'] = False
 
-    # Правило трёх шестёрок
     if total_sixes == 3:
         steps = dice_value
         rule_text = "🔥 Три шестёрки сгорели! Учитывается только последнее число."
@@ -265,24 +251,62 @@ def process_roll(user_id, dice_value):
         if total_sixes == 0:
             return "❌ Для входа в игру необходима шестёрка. Попробуйте снова.", None, main_keyboard()
         
+        # Особый случай: три шестёрки при входе
+        if total_sixes == 3:
+            user['history'] = f"Запрос: {user['query'] if user['query'] else 'не задан'}\n"
+            new_pos = dice_value
+            add_to_history(user_id, f"→ Особый вход: три шестёрки → клетка {new_pos} ({get_cell_name(new_pos)})")
+            
+            # Проверяем змею/стрелу на этой клетке
+            triggered = False
+            trigger_type = None
+            final_pos, tt = apply_snake_or_arrow(new_pos)
+            if final_pos is not None:
+                triggered = True
+                trigger_type = tt
+                add_to_history(user_id, f"→ На клетке {new_pos} сработала {tt} → клетка {final_pos}")
+                new_pos = final_pos
+            
+            user['entered'] = True
+            user['position'] = new_pos
+            
+            # Формируем сообщение
+            msg_parts = [rule_text + query_hint]
+            msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {new_pos}. **{get_cell_name(new_pos)}**")
+            msg_parts.append(get_cell_description(new_pos))
+            if triggered:
+                msg_parts.append(f"\n\n🧭 На этой клетке оказалась **{trigger_type}**! Она переносит вас на клетку {new_pos}. **{get_cell_name(new_pos)}**")
+                # Описание конечной клетки уже добавлено выше, так как new_pos уже конечное.
+            
+            if new_pos == 68:
+                user['game_active'] = False
+                add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
+                save_user(user)
+                return "\n".join(msg_parts) + "\n\n🏁 **Игра окончена. Поздравляю!**", None, main_keyboard()
+            
+            save_user(user)
+            return "\n".join(msg_parts), None, main_keyboard()
+        
+        # Обычный вход
         user['history'] = f"Запрос: {user['query'] if user['query'] else 'не задан'}\n"
         new_pos, events = move_from_start(steps, user_id)
         user['entered'] = True
         user['position'] = new_pos
         
-        # Формируем сообщение из событий
         msg_parts = [rule_text + query_hint]
         for event in events:
             if event[0] == "start_land":
                 msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {event[1]}. **{event[2]}**")
                 msg_parts.append(get_cell_description(event[1]))
             elif event[0] == "trigger":
-                msg_parts.append(f"\n\n🧭 На этой клетке оказалась **{event[2]}**! Она переносит вас на клетку {event[3]}. **{get_cell_name(event[3])}**")
+                # Показываем описание промежуточной клетки
+                msg_parts.append(f"\n\nВы попали на клетку {event[1]}. **{get_cell_name(event[1])}**")
+                msg_parts.append(get_cell_description(event[1]))
+                msg_parts.append(f"\n🧭 На этой клетке оказалась **{event[2]}**! Она переносит вас на клетку {event[3]}. **{get_cell_name(event[3])}**")
             elif event[0] == "end_land":
                 msg_parts.append(f"\n\n✨ Вы переместились на клетку {event[1]}. **{event[2]}**")
                 msg_parts.append(get_cell_description(event[1]))
         
-        # Проверка на финиш
         if new_pos == 68:
             user['game_active'] = False
             add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
@@ -292,15 +316,13 @@ def process_roll(user_id, dice_value):
         save_user(user)
         return "\n".join(msg_parts), None, main_keyboard()
 
-    # --- Обычный ход ---
-    # Правило 8-го уровня
+    # --- Обычный ход (уже в игре) ---
     if 57 <= user['position'] <= 64:
         if user['position'] + steps > 68:
             add_to_history(user_id, f"⚠️ Бросок {steps} сгорает на 8-м уровне")
             save_user(user)
             return f"🌌 Вы находитесь на восьмом уровне. Бросок {steps} выводит за пределы доски и сгорает.\n{rule_text}", None, main_keyboard()
 
-    # Выполняем перемещение
     new_pos, finished, events = move_from_position(user['position'], steps, user_id)
     user['position'] = new_pos
     
@@ -643,7 +665,6 @@ def cmd_stop(message: Message):
     else:
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
 
-# ---------- Запуск ----------
 if __name__ == '__main__':
-    print("✅ Бот ЛИЛА запущен с новыми описаниями и кнопками")
+    print("✅ Бот ЛИЛА запущен с новыми змеями/стрелами")
     bot.infinity_polling()
