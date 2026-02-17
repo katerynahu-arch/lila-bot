@@ -105,8 +105,7 @@ def reset_game(user_id):
     save_user(data)
     return data
 
-# ---------- Игровая логика ----------
-# Змеи и стрелы (новые, предоставленные тобой)
+# ---------- Змеи и стрелы ----------
 SNAKES = {
     12: 8,
     16: 4,
@@ -139,75 +138,30 @@ def apply_snake_or_arrow(cell):
         return ARROWS[cell], 'стрела'
     return None, None
 
-def move_from_start(steps, user_id):
-    """Перемещение при входе в игру. Возвращает итоговую позицию и список событий."""
-    position = 6
-    steps_left = steps - 1
-    events = [("start_land", 6, get_cell_name(6))]
-    
-    # Проверяем, есть ли на клетке 6 змея/стрела
-    new_pos, tt = apply_snake_or_arrow(position)
-    if new_pos is not None:
-        events.append(("trigger", position, tt, new_pos))
-        position = new_pos
-        events.append(("end_land", position, get_cell_name(position)))
-        add_to_history(user_id, f"→ Клетка 6: Заблуждение -> {tt.upper()} на {position}")
-        return position, events
-    
-    add_to_history(user_id, f"→ Клетка 6: Заблуждение")
-    
-    for step in range(steps_left):
-        position += 1
-        if position > 72:
-            position = 72
-            events.append(("end_land", position, get_cell_name(position)))
-            add_to_history(user_id, f"→ Клетка {position}: {get_cell_name(position)}")
-            break
-        new_pos, tt = apply_snake_or_arrow(position)
-        if new_pos is not None:
-            events.append(("trigger", position, tt, new_pos))
-            position = new_pos
-            events.append(("end_land", position, get_cell_name(position)))
-            add_to_history(user_id, f"→ Клетка {position} -> {tt.upper()} на {new_pos}")
-            break
-        if step == steps_left - 1:
-            events.append(("end_land", position, get_cell_name(position)))
-            add_to_history(user_id, f"→ Клетка {position}: {get_cell_name(position)}")
-    return position, events
+def move_steps(current_pos, steps, user_id, is_entering=False, triple_sixes=False):
+    """
+    Перемещение с циклическим полем (после 72 идёт 1).
+    Возвращает (new_pos, finished, triggered, tt, target)
+    """
+    if triple_sixes and is_entering:
+        new_pos = steps  # steps = последнее число (1-5)
+        add_to_history(user_id, f"→ Особый вход: три шестёрки → клетка {new_pos}")
+    else:
+        new_pos = ((current_pos - 1 + steps) % 72) + 1
+        add_to_history(user_id, f"→ Перемещение на {steps} шагов: {current_pos} → {new_pos}")
 
-def move_from_position(current_pos, steps, user_id):
-    """Обычное перемещение. Возвращает новую позицию, флаг завершения и список событий."""
-    pos = current_pos
-    events = []
-    finished = False
-    
-    for step in range(steps):
-        next_cell = pos + 1
-        
-        if 57 <= pos <= 64 and next_cell > 68:
-            add_to_history(user_id, f"⚠️ Бросок сгорает на 8-м уровне")
-            return pos, False, [("burn",)]
-        
-        if next_cell > 72:
-            pos = 72
-            finished = True
-            events.append(("end_land", pos, get_cell_name(pos)))
-            add_to_history(user_id, f"→ Достигнута клетка 72: Тамогуна")
-            break
-            
-        pos = next_cell
-        new_pos, tt = apply_snake_or_arrow(pos)
-        if new_pos is not None:
-            events.append(("trigger", pos, tt, new_pos))
-            pos = new_pos
-            events.append(("end_land", pos, get_cell_name(pos)))
-            add_to_history(user_id, f"→ Клетка {next_cell}: {get_cell_name(next_cell)} -> {tt.upper()} на {new_pos}")
-            break
-        elif step == steps - 1:
-            events.append(("end_land", pos, get_cell_name(pos)))
-            add_to_history(user_id, f"→ Клетка {pos}: {get_cell_name(pos)}")
-    
-    return pos, (pos == 68), events
+    if new_pos == 68:
+        return new_pos, True, False, None, None
+
+    target, tt = apply_snake_or_arrow(new_pos)
+    if target is not None:
+        add_to_history(user_id, f"→ На клетке {new_pos} сработала {tt} → клетка {target}")
+        if target == 68:
+            return target, True, True, tt, target
+        else:
+            return target, False, True, tt, target
+    else:
+        return new_pos, False, False, None, None
 
 def process_roll(user_id, dice_value):
     user = get_user(user_id)
@@ -251,63 +205,25 @@ def process_roll(user_id, dice_value):
         if total_sixes == 0:
             return "❌ Для входа в игру необходима шестёрка. Попробуйте снова.", None, main_keyboard()
         
-        # Особый случай: три шестёрки при входе
-        if total_sixes == 3:
-            user['history'] = f"Запрос: {user['query'] if user['query'] else 'не задан'}\n"
-            new_pos = dice_value
-            add_to_history(user_id, f"→ Особый вход: три шестёрки → клетка {new_pos} ({get_cell_name(new_pos)})")
-            
-            # Проверяем змею/стрелу на этой клетке
-            triggered = False
-            trigger_type = None
-            final_pos, tt = apply_snake_or_arrow(new_pos)
-            if final_pos is not None:
-                triggered = True
-                trigger_type = tt
-                add_to_history(user_id, f"→ На клетке {new_pos} сработала {tt} → клетка {final_pos}")
-                new_pos = final_pos
-            
-            user['entered'] = True
-            user['position'] = new_pos
-            
-            # Формируем сообщение
-            msg_parts = [rule_text + query_hint]
-            msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {new_pos}. **{get_cell_name(new_pos)}**")
-            msg_parts.append(get_cell_description(new_pos))
-            if triggered:
-                msg_parts.append(f"\n\n🧭 На этой клетке оказалась **{trigger_type}**! Она переносит вас на клетку {new_pos}. **{get_cell_name(new_pos)}**")
-                # Описание конечной клетки уже добавлено выше, так как new_pos уже конечное.
-            
-            if new_pos == 68:
-                user['game_active'] = False
-                add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
-                save_user(user)
-                return "\n".join(msg_parts) + "\n\n🏁 **Игра окончена. Поздравляю!**", None, main_keyboard()
-            
-            save_user(user)
-            return "\n".join(msg_parts), None, main_keyboard()
-        
-        # Обычный вход
         user['history'] = f"Запрос: {user['query'] if user['query'] else 'не задан'}\n"
-        new_pos, events = move_from_start(steps, user_id)
+        triple_sixes_case = (total_sixes == 3)
+        new_pos, finished, triggered, tt, target = move_steps(68, steps, user_id, is_entering=True, triple_sixes=triple_sixes_case)
         user['entered'] = True
         user['position'] = new_pos
-        
+
         msg_parts = [rule_text + query_hint]
-        for event in events:
-            if event[0] == "start_land":
-                msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {event[1]}. **{event[2]}**")
-                msg_parts.append(get_cell_description(event[1]))
-            elif event[0] == "trigger":
-                # Показываем описание промежуточной клетки
-                msg_parts.append(f"\n\nВы попали на клетку {event[1]}. **{get_cell_name(event[1])}**")
-                msg_parts.append(get_cell_description(event[1]))
-                msg_parts.append(f"\n🧭 На этой клетке оказалась **{event[2]}**! Она переносит вас на клетку {event[3]}. **{get_cell_name(event[3])}**")
-            elif event[0] == "end_land":
-                msg_parts.append(f"\n\n✨ Вы переместились на клетку {event[1]}. **{event[2]}**")
-                msg_parts.append(get_cell_description(event[1]))
-        
-        if new_pos == 68:
+        msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {new_pos}. **{get_cell_name(new_pos)}**")
+
+        if triggered:
+            msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {target}. **{get_cell_name(target)}**")
+            msg_parts.append(f"\n\n✨ Вы переместились на клетку {target}. **{get_cell_name(target)}**")
+            msg_parts.append(get_cell_description(target))
+            if target == 68:
+                finished = True
+        else:
+            msg_parts.append(get_cell_description(new_pos))
+
+        if finished:
             user['game_active'] = False
             add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
             save_user(user)
@@ -316,27 +232,22 @@ def process_roll(user_id, dice_value):
         save_user(user)
         return "\n".join(msg_parts), None, main_keyboard()
 
-    # --- Обычный ход (уже в игре) ---
-    if 57 <= user['position'] <= 64:
-        if user['position'] + steps > 68:
-            add_to_history(user_id, f"⚠️ Бросок {steps} сгорает на 8-м уровне")
-            save_user(user)
-            return f"🌌 Вы находитесь на восьмом уровне. Бросок {steps} выводит за пределы доски и сгорает.\n{rule_text}", None, main_keyboard()
-
-    new_pos, finished, events = move_from_position(user['position'], steps, user_id)
+    # --- Обычный ход ---
+    new_pos, finished, triggered, tt, target = move_steps(user['position'], steps, user_id, is_entering=False, triple_sixes=False)
     user['position'] = new_pos
-    
+
     msg_parts = [rule_text]
-    for event in events:
-        if event[0] == "burn":
-            msg_parts.append("\n🌌 Бросок сгорает на 8-м уровне.")
-        elif event[0] == "trigger":
-            msg_parts.append(f"\n\nВы попали на клетку {event[1]}. **{get_cell_name(event[1])}**")
-            msg_parts.append(get_cell_description(event[1]))
-            msg_parts.append(f"\n🧭 На этой клетке оказалась **{event[2]}**! Она переносит вас на клетку {event[3]}. **{get_cell_name(event[3])}**")
-        elif event[0] == "end_land":
-            msg_parts.append(f"\n\n✨ Вы переместились на клетку {event[1]}. **{event[2]}**")
-            msg_parts.append(get_cell_description(event[1]))
+    msg_parts.append(f"\n\nВы переместились на клетку {new_pos}. **{get_cell_name(new_pos)}**")
+
+    if triggered:
+        msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {target}. **{get_cell_name(target)}**")
+        msg_parts.append(f"\n\n✨ Вы переместились на клетку {target}. **{get_cell_name(target)}**")
+        msg_parts.append(get_cell_description(target))
+        user['position'] = target
+        if target == 68:
+            finished = True
+    else:
+        msg_parts.append(get_cell_description(new_pos))
 
     if finished:
         user['game_active'] = False
@@ -502,7 +413,7 @@ def get_cell_description(cell):
     }
     return descriptions.get(cell, f"**Клетка {cell}** – описание будет добавлено.")
 
-# ---------- Обработчики команд ----------
+# ---------- Обработчики команд и кнопок ----------
 @bot.message_handler(commands=['start'])
 def cmd_start(message: Message):
     bot.send_message(message.chat.id,
@@ -543,7 +454,7 @@ def cmd_setquery(message: Message):
     save_user(user)
     bot.send_message(user_id, f"💭 Ваш запрос принят: **{query}**\n\nТеперь бросайте кубик. Шестёрка откроет вход, а числа 1–5 покажут, насколько вы близки к истинному запросу.", reply_markup=main_keyboard())
 
-# ---------- Обработка нажатий на кнопки ----------
+# Кнопка "Бросить кубик"
 @bot.message_handler(func=lambda message: message.text == "🎲 Бросить кубик")
 def handle_roll_button(message: Message):
     user_id = message.from_user.id
@@ -555,7 +466,12 @@ def handle_roll_button(message: Message):
     dice = random.randint(1, 6)
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Выпало:** {dice}\n\n{response}", reply_markup=keyboard)
+    if "Игра окончена" not in response:
+        bot.send_message(user_id,
+                         "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
+                         reply_markup=keyboard)
 
+# Кнопка "Ввести число"
 @bot.message_handler(func=lambda message: message.text == "✏️ Ввести число")
 def handle_enter_button(message: Message):
     user_id = message.from_user.id
@@ -565,11 +481,13 @@ def handle_enter_button(message: Message):
         return
     bot.send_message(user_id, "Выберите число от 1 до 6:", reply_markup=number_keyboard())
 
+# Кнопка "Назад" из цифрового меню
 @bot.message_handler(func=lambda message: message.text == "🔙 Назад")
 def handle_back_button(message: Message):
     user_id = message.from_user.id
     bot.send_message(user_id, "Главное меню:", reply_markup=main_keyboard())
 
+# Обработка ввода цифры (1-6)
 @bot.message_handler(func=lambda message: message.text.isdigit() and 1 <= int(message.text) <= 6)
 def handle_number_input(message: Message):
     user_id = message.from_user.id
@@ -581,20 +499,17 @@ def handle_number_input(message: Message):
     dice = int(message.text)
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Вы ввели:** {dice}\n\n{response}", reply_markup=keyboard)
+    if "Игра окончена" not in response:
+        bot.send_message(user_id,
+                         "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
+                         reply_markup=keyboard)
 
-# ---------- Команды (остаются как запасной вариант) ----------
+# Команда /roll (запасной вариант)
 @bot.message_handler(commands=['roll'])
 def cmd_roll(message: Message):
-    user_id = message.from_user.id
-    user = get_user(user_id)
-    if not user or not user['game_active']:
-        bot.send_message(user_id, "У вас нет активной игры. /newgame", reply_markup=main_keyboard())
-        return
-    
-    dice = random.randint(1, 6)
-    response, _, keyboard = process_roll(user_id, dice)
-    bot.send_message(user_id, f"🎲 **Выпало:** {dice}\n\n{response}", reply_markup=keyboard)
+    handle_roll_button(message)
 
+# Команда /enter (запасной вариант)
 @bot.message_handler(commands=['enter'])
 def cmd_enter(message: Message):
     user_id = message.from_user.id
@@ -606,10 +521,14 @@ def cmd_enter(message: Message):
     if dice < 1 or dice > 6:
         bot.send_message(user_id, "Число должно быть от 1 до 6.", reply_markup=main_keyboard())
         return
-    
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Вы ввели:** {dice}\n\n{response}", reply_markup=keyboard)
+    if "Игра окончена" not in response:
+        bot.send_message(user_id,
+                         "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
+                         reply_markup=keyboard)
 
+# Команда /status
 @bot.message_handler(commands=['status'])
 def cmd_status(message: Message):
     user_id = message.from_user.id
@@ -617,7 +536,6 @@ def cmd_status(message: Message):
     if not user or not user['game_active']:
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
         return
-    
     pos = user['position']
     entered = "✅ да" if user['entered'] else "⏳ нет (ожидается вход)"
     status = (
@@ -628,6 +546,7 @@ def cmd_status(message: Message):
     )
     bot.send_message(user_id, status, reply_markup=main_keyboard())
 
+# Команда /history
 @bot.message_handler(commands=['history'])
 def cmd_history(message: Message):
     user_id = message.from_user.id
@@ -635,13 +554,12 @@ def cmd_history(message: Message):
     if not user or not user['game_active']:
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
         return
-    
     if not user['history']:
         bot.send_message(user_id, "История пока пуста.", reply_markup=main_keyboard())
         return
-    
     bot.send_message(user_id, f"📜 **История вашего пути:**\n\n{user['history']}", reply_markup=main_keyboard())
 
+# Команда /cancel (сброс серии шестёрок)
 @bot.message_handler(commands=['cancel'])
 def cmd_cancel(message: Message):
     user_id = message.from_user.id
@@ -654,6 +572,7 @@ def cmd_cancel(message: Message):
     else:
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
 
+# Команда /stop (принудительное завершение)
 @bot.message_handler(commands=['stop'])
 def cmd_stop(message: Message):
     user_id = message.from_user.id
@@ -666,5 +585,5 @@ def cmd_stop(message: Message):
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
 
 if __name__ == '__main__':
-    print("✅ Бот ЛИЛА запущен с новыми змеями/стрелами")
+    print("✅ Бот ЛИЛА запущен (с напоминанием после хода)")
     bot.infinity_polling()
