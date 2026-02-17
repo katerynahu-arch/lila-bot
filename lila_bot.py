@@ -107,28 +107,10 @@ def reset_game(user_id):
 
 # ---------- Змеи и стрелы ----------
 SNAKES = {
-    12: 8,
-    16: 4,
-    24: 7,
-    29: 6,
-    44: 9,
-    52: 35,
-    55: 3,
-    61: 13,
-    63: 2,
-    72: 51
+    12: 8, 16: 4, 24: 7, 29: 6, 44: 9, 52: 35, 55: 3, 61: 13, 63: 2, 72: 51
 }
 ARROWS = {
-    10: 23,
-    17: 69,
-    20: 32,
-    22: 60,
-    27: 41,
-    28: 50,
-    37: 66,
-    45: 67,
-    46: 62,
-    54: 68
+    10: 23, 17: 69, 20: 32, 22: 60, 27: 41, 28: 50, 37: 66, 45: 67, 46: 62, 54: 68
 }
 
 def apply_snake_or_arrow(cell):
@@ -139,12 +121,8 @@ def apply_snake_or_arrow(cell):
     return None, None
 
 def move_steps(current_pos, steps, user_id, is_entering=False, triple_sixes=False):
-    """
-    Перемещение с циклическим полем (после 72 идёт 1).
-    Возвращает (new_pos, finished, triggered, tt, target)
-    """
     if triple_sixes and is_entering:
-        new_pos = steps  # steps = последнее число (1-5)
+        new_pos = steps
         add_to_history(user_id, f"→ Особый вход: три шестёрки → клетка {new_pos}")
     else:
         new_pos = ((current_pos - 1 + steps) % 72) + 1
@@ -172,7 +150,6 @@ def process_roll(user_id, dice_value):
         user['pending_sixes'] += 1
         user['waiting_for_roll'] = True
         save_user(user)
-        
         if user['pending_sixes'] == 4:
             user['pending_sixes'] = 0
             user['position'] = 1
@@ -181,7 +158,6 @@ def process_roll(user_id, dice_value):
             add_to_history(user_id, "⚠️ Четыре шестёрки подряд — возврат к Рождению")
             desc = get_cell_description(1)
             return f"🔄 Четыре шестёрки подряд! Вы возвращаетесь на клетку 1.\n\n{desc}", None, main_keyboard()
-            
         return f"🎲 Выпало 6! Всего шестёрок подряд: {user['pending_sixes']}\nБросайте ещё раз.", None, main_keyboard()
 
     total_sixes = user['pending_sixes']
@@ -204,61 +180,50 @@ def process_roll(user_id, dice_value):
     if not user['entered']:
         if total_sixes == 0:
             return "❌ Для входа в игру необходима шестёрка. Попробуйте снова.", None, main_keyboard()
-        
         user['history'] = f"Запрос: {user['query'] if user['query'] else 'не задан'}\n"
         triple_sixes_case = (total_sixes == 3)
         new_pos, finished, triggered, tt, target = move_steps(68, steps, user_id, is_entering=True, triple_sixes=triple_sixes_case)
         user['entered'] = True
         user['position'] = new_pos
-
         msg_parts = [rule_text + query_hint]
         msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {new_pos}. **{get_cell_name(new_pos)}**")
-
         if triggered:
             msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {target}. **{get_cell_name(target)}**")
-            msg_parts.append(f"\n\n✨ Вы переместились на клетку {target}. **{get_cell_name(target)}**")
             msg_parts.append(get_cell_description(target))
             if target == 68:
                 finished = True
         else:
             msg_parts.append(get_cell_description(new_pos))
-
         if finished:
             user['game_active'] = False
             add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
             save_user(user)
             return "\n".join(msg_parts) + "\n\n🏁 **Игра окончена. Поздравляю!**", None, main_keyboard()
-            
         save_user(user)
         return "\n".join(msg_parts), None, main_keyboard()
 
     # --- Обычный ход ---
     new_pos, finished, triggered, tt, target = move_steps(user['position'], steps, user_id, is_entering=False, triple_sixes=False)
     user['position'] = new_pos
-
     msg_parts = [rule_text]
     msg_parts.append(f"\n\nВы переместились на клетку {new_pos}. **{get_cell_name(new_pos)}**")
-
     if triggered:
         msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {target}. **{get_cell_name(target)}**")
-        msg_parts.append(f"\n\n✨ Вы переместились на клетку {target}. **{get_cell_name(target)}**")
         msg_parts.append(get_cell_description(target))
         user['position'] = target
         if target == 68:
             finished = True
     else:
         msg_parts.append(get_cell_description(new_pos))
-
     if finished:
         user['game_active'] = False
         add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
         save_user(user)
         return "\n".join(msg_parts) + "\n\n🏁 **Игра окончена. Поздравляю!**", None, main_keyboard()
-
     save_user(user)
     return "\n".join(msg_parts), None, main_keyboard()
 
-# ---------- Названия и описания клеток ----------
+# ---------- Названия клеток ----------
 def get_cell_name(cell):
     names = {
         1: "Джанма / Рождение",
@@ -336,6 +301,7 @@ def get_cell_name(cell):
     }
     return names.get(cell, f"Клетка {cell}")
 
+# ---------- Описания клеток (полные, из книги Анны Саркисян) ----------
 def get_cell_description(cell):
     descriptions = {
         1: "**Джанма / Рождение** — Попасть сюда — большая редкость. Это знак того, что ты не жертва обстоятельств, а твоя душа сама выбрала родителей, окружение и жизненный сценарий. Ты здесь не для того, чтобы искать причину проблем вовне, а чтобы осознать: все, что с тобой происходит (даже конфликты) — твой собственный выбор.\n\nВопросы: Осознаю ли я, что сам выбрал свою жизнь, родителей и путь? Понимаю ли, зачем моей душе были нужны именно эти уроки и эти люди?",
@@ -411,11 +377,11 @@ def get_cell_description(cell):
         71: "**Раджа Гуна / Энергия движения** — Страсть, действие, активность. Пора пересмотреть направление своей энергии. То ли дело я делаю? Если движением движет эго (хочу быть великим), контакт с Богом теряется.\n\nВопросы: Куда направлена моя энергия? То ли дело я делаю, или просто суечусь из чувства важности?",
         72: "**Тама Гуна / Энергия инерции** — Змея. Спуск на Землю для нового восхождения. Важнейший момент: с какой мыслью ты здесь? Это твой «бриллиант» осознанности, иначе пустишься в новый долгий круг. Максимальная осознанность здесь и сейчас.\n\nВопросы: С какой мыслью или инсайтом я стою здесь? Готов ли я сохранить эту осознанность, чтобы не блуждать по кругу вечно?"
     }
-    return descriptions.get(cell, f"**Клетка {cell}** – описание будет добавлено.")
+    return descriptions.get(cell, f"**{get_cell_name(cell)}** – описание будет добавлено.")
 
-# ---------- Обработчики команд и кнопок ----------
+# ---------- Обработчики ----------
 @bot.message_handler(commands=['start'])
-def cmd_start(message: Message):
+def start(message: Message):
     bot.send_message(message.chat.id,
         "🎲 Добро пожаловать в игру ЛИЛА!\n"
         "Я буду вашим Проводником.\n\n"
@@ -426,7 +392,7 @@ def cmd_start(message: Message):
         reply_markup=main_keyboard())
 
 @bot.message_handler(commands=['newgame'])
-def cmd_newgame(message: Message):
+def newgame(message: Message):
     user_id = message.from_user.id
     reset_game(user_id)
     bot.send_message(user_id,
@@ -438,82 +404,73 @@ def cmd_newgame(message: Message):
         reply_markup=main_keyboard())
 
 @bot.message_handler(commands=['setquery'])
-def cmd_setquery(message: Message):
+def setquery(message: Message):
     user_id = message.from_user.id
     user = get_user(user_id)
     if not user or not user['game_active']:
         bot.send_message(user_id, "Сначала начните новую игру: /newgame", reply_markup=main_keyboard())
         return
-    
     query = message.text.replace('/setquery', '', 1).strip()
     if not query:
         bot.send_message(user_id, "Напишите ваш запрос после команды, например:\n`/setquery Готов ли я к переменам?`", reply_markup=main_keyboard())
         return
-    
     user['query'] = query
     save_user(user)
-    bot.send_message(user_id, f"💭 Ваш запрос принят: **{query}**\n\nТеперь бросайте кубик. Шестёрка откроет вход, а числа 1–5 покажут, насколько вы близки к истинному запросу.", reply_markup=main_keyboard())
+    # Новое сообщение после принятия запроса
+    bot.send_message(user_id, f"💭 Ваш запрос принят: **{query}**\n\nИтак, настало время сделать свой первый ход. Бросай кубик!", reply_markup=main_keyboard())
 
-# Кнопка "Бросить кубик"
-@bot.message_handler(func=lambda message: message.text == "🎲 Бросить кубик")
-def handle_roll_button(message: Message):
-    user_id = message.from_user.id
+@bot.message_handler(func=lambda m: m.text == "🎲 Бросить кубик")
+def roll_button(m: Message):
+    user_id = m.from_user.id
     user = get_user(user_id)
     if not user or not user['game_active']:
         bot.send_message(user_id, "У вас нет активной игры. /newgame", reply_markup=main_keyboard())
         return
-    
     dice = random.randint(1, 6)
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Выпало:** {dice}\n\n{response}", reply_markup=keyboard)
-    if "Игра окончена" not in response:
+    if "Игра окончена" not in response and "Выпало 6!" not in response:
         bot.send_message(user_id,
-                         "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
-                         reply_markup=keyboard)
+            "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
+            reply_markup=keyboard)
 
-# Кнопка "Ввести число"
-@bot.message_handler(func=lambda message: message.text == "✏️ Ввести число")
-def handle_enter_button(message: Message):
-    user_id = message.from_user.id
+@bot.message_handler(func=lambda m: m.text == "✏️ Ввести число")
+def enter_button(m: Message):
+    user_id = m.from_user.id
     user = get_user(user_id)
     if not user or not user['game_active']:
         bot.send_message(user_id, "У вас нет активной игры. /newgame", reply_markup=main_keyboard())
         return
     bot.send_message(user_id, "Выберите число от 1 до 6:", reply_markup=number_keyboard())
 
-# Кнопка "Назад" из цифрового меню
-@bot.message_handler(func=lambda message: message.text == "🔙 Назад")
-def handle_back_button(message: Message):
-    user_id = message.from_user.id
-    bot.send_message(user_id, "Главное меню:", reply_markup=main_keyboard())
+@bot.message_handler(func=lambda m: m.text == "🔙 Назад")
+def back_button(m: Message):
+    bot.send_message(m.chat.id, "Главное меню:", reply_markup=main_keyboard())
 
-# Обработка ввода цифры (1-6)
-@bot.message_handler(func=lambda message: message.text.isdigit() and 1 <= int(message.text) <= 6)
-def handle_number_input(message: Message):
-    user_id = message.from_user.id
+@bot.message_handler(func=lambda m: m.text.isdigit() and 1 <= int(m.text) <= 6)
+def number_input(m: Message):
+    user_id = m.from_user.id
     user = get_user(user_id)
     if not user or not user['game_active']:
         bot.send_message(user_id, "У вас нет активной игры. /newgame", reply_markup=main_keyboard())
         return
-    
-    dice = int(message.text)
+    dice = int(m.text)
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Вы ввели:** {dice}\n\n{response}", reply_markup=keyboard)
-    if "Игра окончена" not in response:
+    if "Игра окончена" not in response and "Выпало 6!" not in response:
         bot.send_message(user_id,
-                         "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
-                         reply_markup=keyboard)
+            "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
+            reply_markup=keyboard)
 
-# Команда /roll (запасной вариант)
+# Команды /roll и /enter (запасной вариант)
 @bot.message_handler(commands=['roll'])
-def cmd_roll(message: Message):
-    handle_roll_button(message)
+def cmd_roll(m: Message):
+    roll_button(m)
 
-# Команда /enter (запасной вариант)
 @bot.message_handler(commands=['enter'])
-def cmd_enter(message: Message):
-    user_id = message.from_user.id
-    args = message.text.split()
+def cmd_enter(m: Message):
+    user_id = m.from_user.id
+    args = m.text.split()
     if len(args) != 2 or not args[1].isdigit():
         bot.send_message(user_id, "Использование: /enter <число от 1 до 6>", reply_markup=main_keyboard())
         return
@@ -523,15 +480,15 @@ def cmd_enter(message: Message):
         return
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Вы ввели:** {dice}\n\n{response}", reply_markup=keyboard)
-    if "Игра окончена" not in response:
+    if "Игра окончена" not in response and "Выпало 6!" not in response:
         bot.send_message(user_id,
-                         "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
-                         reply_markup=keyboard)
+            "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
+            reply_markup=keyboard)
 
 # Команда /status
 @bot.message_handler(commands=['status'])
-def cmd_status(message: Message):
-    user_id = message.from_user.id
+def cmd_status(m: Message):
+    user_id = m.from_user.id
     user = get_user(user_id)
     if not user or not user['game_active']:
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
@@ -548,8 +505,8 @@ def cmd_status(message: Message):
 
 # Команда /history
 @bot.message_handler(commands=['history'])
-def cmd_history(message: Message):
-    user_id = message.from_user.id
+def cmd_history(m: Message):
+    user_id = m.from_user.id
     user = get_user(user_id)
     if not user or not user['game_active']:
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
@@ -561,8 +518,8 @@ def cmd_history(message: Message):
 
 # Команда /cancel (сброс серии шестёрок)
 @bot.message_handler(commands=['cancel'])
-def cmd_cancel(message: Message):
-    user_id = message.from_user.id
+def cmd_cancel(m: Message):
+    user_id = m.from_user.id
     user = get_user(user_id)
     if user and user['game_active']:
         user['pending_sixes'] = 0
@@ -574,8 +531,8 @@ def cmd_cancel(message: Message):
 
 # Команда /stop (принудительное завершение)
 @bot.message_handler(commands=['stop'])
-def cmd_stop(message: Message):
-    user_id = message.from_user.id
+def cmd_stop(m: Message):
+    user_id = m.from_user.id
     user = get_user(user_id)
     if user:
         user['game_active'] = False
@@ -585,5 +542,5 @@ def cmd_stop(message: Message):
         bot.send_message(user_id, "Нет активной игры.", reply_markup=main_keyboard())
 
 if __name__ == '__main__':
-    print("✅ Бот ЛИЛА запущен (с напоминанием после хода)")
+    print("✅ Бот ЛИЛА запущен на Bothost (полные описания, исправления, новое сообщение)")
     bot.infinity_polling()
