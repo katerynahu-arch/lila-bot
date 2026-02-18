@@ -434,7 +434,7 @@ def roll_button(m: Message):
     dice = random.randint(1, 6)
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Выпало:** {dice}\n\n{response}", reply_markup=keyboard)
-    if "Игра окончена" not in response and "Выпало 6!" not in response:
+    if "Игра окончена" not in response and "Выпало 6!" not in response and "Для входа в игру необходима шестёрка" not in response:
         bot.send_message(user_id,
             "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
             reply_markup=keyboard)
@@ -462,7 +462,7 @@ def number_input(m: Message):
     dice = int(m.text)
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Вы ввели:** {dice}\n\n{response}", reply_markup=keyboard)
-    if "Игра окончена" not in response and "Выпало 6!" not in response:
+    if "Игра окончена" not in response and "Выпало 6!" not in response and "Для входа в игру необходима шестёрка" not in response:
         bot.send_message(user_id,
             "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
             reply_markup=keyboard)
@@ -485,7 +485,7 @@ def cmd_enter(m: Message):
         return
     response, _, keyboard = process_roll(user_id, dice)
     bot.send_message(user_id, f"🎲 **Вы ввели:** {dice}\n\n{response}", reply_markup=keyboard)
-    if "Игра окончена" not in response and "Выпало 6!" not in response:
+    if "Игра окончена" not in response and "Выпало 6!" not in response and "Для входа в игру необходима шестёрка" not in response:
         bot.send_message(user_id,
             "Когда ты будешь готов, когда найдёшь все ответы на эти вопросы, можешь снова бросать кубик и делать следующий ход.",
             reply_markup=keyboard)
