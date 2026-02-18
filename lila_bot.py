@@ -121,25 +121,36 @@ def apply_snake_or_arrow(cell):
     return None, None
 
 def move_steps(current_pos, steps, user_id, is_entering=False, triple_sixes=False):
+    """
+    Возвращает: (intermediate, final, finished, triggered, tt)
+    intermediate - клетка, на которую игрок встал после шагов (до змеи/стрелы)
+    final - клетка после применения змеи/стрелы (если есть)
+    finished - достигнута ли клетка 68 (игра окончена)
+    triggered - сработала ли змея/стрела
+    tt - тип триггера ('змея' или 'стрела')
+    """
     if triple_sixes and is_entering:
-        new_pos = steps
-        add_to_history(user_id, f"→ Особый вход: три шестёрки → клетка {new_pos}")
+        intermediate = steps
+        add_to_history(user_id, f"→ Особый вход: три шестёрки → клетка {intermediate}")
     else:
-        new_pos = ((current_pos - 1 + steps) % 72) + 1
-        add_to_history(user_id, f"→ Перемещение на {steps} шагов: {current_pos} → {new_pos}")
+        intermediate = ((current_pos - 1 + steps) % 72) + 1
+        add_to_history(user_id, f"→ Перемещение на {steps} шагов: {current_pos} → {intermediate}")
 
-    if new_pos == 68:
-        return new_pos, True, False, None, None
+    # Если сразу попали на 68 – игра завершена, змеи/стрелы не применяются
+    if intermediate == 68:
+        return intermediate, intermediate, True, False, None
 
-    target, tt = apply_snake_or_arrow(new_pos)
+    # Проверяем змею/стрелу на промежуточной клетке
+    target, tt = apply_snake_or_arrow(intermediate)
     if target is not None:
-        add_to_history(user_id, f"→ На клетке {new_pos} сработала {tt} → клетка {target}")
+        add_to_history(user_id, f"→ На клетке {intermediate} сработала {tt} → клетка {target}")
         if target == 68:
-            return target, True, True, tt, target
+            return intermediate, target, True, True, tt
         else:
-            return target, False, True, tt, target
+            return intermediate, target, False, True, tt
     else:
-        return new_pos, False, False, None, None
+        # Нет триггера – конечная клетка совпадает с промежуточной
+        return intermediate, intermediate, False, False, None
 
 def process_roll(user_id, dice_value):
     user = get_user(user_id)
@@ -182,22 +193,22 @@ def process_roll(user_id, dice_value):
             return "❌ Для входа в игру необходима шестёрка. Попробуйте снова.", None, main_keyboard()
         user['history'] = f"Запрос: {user['query'] if user['query'] else 'не задан'}\n"
         triple_sixes_case = (total_sixes == 3)
-        new_pos, finished, triggered, tt, target = move_steps(68, steps, user_id, is_entering=True, triple_sixes=triple_sixes_case)
+        intermediate, final, finished, triggered, tt = move_steps(
+            68, steps, user_id, is_entering=True, triple_sixes=triple_sixes_case
+        )
         user['entered'] = True
-        user['position'] = new_pos
+        user['position'] = final  # сохраняем конечную позицию
         msg_parts = [rule_text + query_hint]
-        # Показываем клетку, на которую встали (начальная)
-        msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {new_pos}. **{get_cell_name(new_pos)}**")
+        # Показываем промежуточную клетку (только название)
+        msg_parts.append(f"\n\nВы вступили на поле и оказались на клетке {intermediate}. **{get_cell_name(intermediate)}**")
         if triggered:
-            # Если сработал триггер, добавляем сообщение о переносе и описание конечной клетки
-            msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {target}. **{get_cell_name(target)}**")
-            msg_parts.append(get_cell_description(target))
-            if target == 68:
-                finished = True
+            # Добавляем сообщение о переносе и описание конечной клетки
+            msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {final}. **{get_cell_name(final)}**")
+            msg_parts.append(get_cell_description(final))
         else:
-            # Если триггера нет, сразу описание этой клетки
-            msg_parts.append(get_cell_description(new_pos))
-        if finished:
+            # Если триггера нет, сразу описание промежуточной клетки
+            msg_parts.append(get_cell_description(intermediate))
+        if finished or final == 68:
             user['game_active'] = False
             add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
             save_user(user)
@@ -206,22 +217,19 @@ def process_roll(user_id, dice_value):
         return "\n".join(msg_parts), None, main_keyboard()
 
     # --- Обычный ход ---
-    new_pos, finished, triggered, tt, target = move_steps(user['position'], steps, user_id, is_entering=False, triple_sixes=False)
-    user['position'] = new_pos
+    intermediate, final, finished, triggered, tt = move_steps(
+        user['position'], steps, user_id, is_entering=False, triple_sixes=False
+    )
+    user['position'] = final
     msg_parts = [rule_text]
-    # Показываем клетку, на которую встали (начальная)
-    msg_parts.append(f"\n\nВы переместились на клетку {new_pos}. **{get_cell_name(new_pos)}**")
+    # Показываем промежуточную клетку
+    msg_parts.append(f"\n\nВы переместились на клетку {intermediate}. **{get_cell_name(intermediate)}**")
     if triggered:
-        # Если сработал триггер, добавляем сообщение о переносе и описание конечной клетки
-        msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {target}. **{get_cell_name(target)}**")
-        msg_parts.append(get_cell_description(target))
-        user['position'] = target
-        if target == 68:
-            finished = True
+        msg_parts.append(f"\n🧭 На этой клетке оказалась **{tt}**! Она переносит вас на клетку {final}. **{get_cell_name(final)}**")
+        msg_parts.append(get_cell_description(final))
     else:
-        # Если триггера нет, описание текущей клетки
-        msg_parts.append(get_cell_description(new_pos))
-    if finished:
+        msg_parts.append(get_cell_description(intermediate))
+    if finished or final == 68:
         user['game_active'] = False
         add_to_history(user_id, "✨ Достигнуто Космическое сознание! Игра завершена.")
         save_user(user)
@@ -549,3 +557,4 @@ def cmd_stop(m: Message):
 if __name__ == '__main__':
     print("✅ Бот ЛИЛА запущен на Bothost (полные описания, исправления, новое сообщение)")
     bot.infinity_polling()
+
